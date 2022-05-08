@@ -1,72 +1,34 @@
-import logging
 import os
+import re
 from datetime import timedelta
-from decimal import Decimal
 
 from tinkoff.invest import CandleInterval, Client
-from tinkoff.invest.strategies.base.account_manager import AccountManager
-from tinkoff.invest.strategies.moving_average.signal_executor import (
-    MovingAverageSignalExecutor,
-)
-from tinkoff.invest.strategies.moving_average.strategy import MovingAverageStrategy
-from tinkoff.invest.strategies.moving_average.strategy_settings import (
-    MovingAverageStrategySettings,
-)
-from tinkoff.invest.strategies.moving_average.strategy_state import (
-    MovingAverageStrategyState,
-)
-from tinkoff.invest.strategies.moving_average.trader import MovingAverageStrategyTrader
+from tinkoff.invest.utils import now
 
-logging.basicConfig(format="%(asctime)s %(levelname)s:%(message)s", level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-
-TOKEN = os.environ["INVEST_TOKEN"]
-FIGI = os.environ["INVEST_FIGI"]
-ACCOUNT_ID = os.environ["INVEST_ACCOUNT_ID"]
+TOKEN = 't.BLtZWmlj_Raj-77CQuiflaKQQerwa1MSn56eO_AulW8X2QcC24Bb5RiBF_rjQdzNORfzTEhGmfdJoJeezyu-xQ'
+API_TOKEN = '1993104882:AAHEGfoWyrSZaot8l8MMoblgrMaiBPo9cWY'
+ID = 802693897
+taccount_id = '2097214379'
 
 
 def main():
-    with Client(TOKEN) as services:
-        settings = MovingAverageStrategySettings(
-            share_id=FIGI,
-            account_id=ACCOUNT_ID,
-            max_transaction_price=Decimal(10000),
-            candle_interval=CandleInterval.CANDLE_INTERVAL_1_MIN,
-            long_period=timedelta(minutes=100),
-            short_period=timedelta(minutes=20),
-            std_period=timedelta(minutes=30),
-        )
+    a = []
+    with Client(TOKEN) as client:
+        operations = client.operations.get_operations(account_id=taccount_id, from_=now() - timedelta(days=30),
+                                                      to=now(),
+                                                      )
+        for oper in operations.operations:
+            if only(oper.figi):
+                print(oper.figi)
+    return 0
 
-        account_manager = AccountManager(services=services, strategy_settings=settings)
-        state = MovingAverageStrategyState()
-        strategy = MovingAverageStrategy(
-            settings=settings,
-            account_manager=account_manager,
-            state=state,
-        )
-        signal_executor = MovingAverageSignalExecutor(
-            services=services,
-            state=state,
-            settings=settings,
-        )
-        trader = MovingAverageStrategyTrader(
-            strategy=strategy,
-            settings=settings,
-            services=services,
-            state=state,
-            signal_executor=signal_executor,
-            account_manager=account_manager,
-        )
 
-        initial_balance = account_manager.get_current_balance()
+def only(string: str) -> bool:
+    for let in string:
+        if not let in 'ABCDEFGHIGKLMNOPQRSTUVWXYZ1234567890':
+            return False
+        else:
+            return True
 
-        for i in range(5):
-            logger.info("Trade %s", i)
-            trader.trade()
-
-        current_balance = account_manager.get_current_balance()
-
-        logger.info("Initial balance %s", initial_balance)
-        logger.info("Current balance %s", current_balance)
-        strategy.plot()
+if __name__ == "__main__":
+    main()
