@@ -1,12 +1,14 @@
 import asyncio
 import time
 
-from tinkoff.invest import Client, CandleInstrument, SubscriptionInterval
+from tinkoff.invest import Client, CandleInstrument, SubscriptionInterval, OperationState
 from tinkoff.invest.services import MarketDataStreamManager, InstrumentIdType
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, CallbackQuery
 import logging
 from keyboard import main_menu, trade_menu, exchange, menu, to_menu
+from datetime import timedelta
+from tinkoff.invest.utils import now
 
 """
 TODO: деление акций по биржам
@@ -62,12 +64,13 @@ async def get_portfolio(message: types.Message):
     with Client(TOKEN) as client:
         portfolio = client.operations.get_portfolio(account_id=taccount_id)
         logging.info(portfolio)
-        profit = portfolio.expected_yield.units + (portfolio.expected_yield.nano / pow(10,9))
-        t_amount_shares = portfolio.total_amount_shares.units + (portfolio.total_amount_shares.nano / pow(10,9))
-        t_amount_bonds = portfolio.total_amount_bonds.units + (portfolio.total_amount_bonds.nano / pow(10,9))
-        t_amount_etf = portfolio.total_amount_etf.units + (portfolio.total_amount_etf.nano / pow(10,9))
-        t_amount_currencies = portfolio.total_amount_currencies.units + (portfolio.total_amount_currencies.nano / pow(10,9))
-        t_amount_futures = portfolio.total_amount_futures.units + (portfolio.total_amount_futures.nano / pow(10,9))
+        profit = portfolio.expected_yield.units + (portfolio.expected_yield.nano / pow(10, 9))
+        t_amount_shares = portfolio.total_amount_shares.units + (portfolio.total_amount_shares.nano / pow(10, 9))
+        t_amount_bonds = portfolio.total_amount_bonds.units + (portfolio.total_amount_bonds.nano / pow(10, 9))
+        t_amount_etf = portfolio.total_amount_etf.units + (portfolio.total_amount_etf.nano / pow(10, 9))
+        t_amount_currencies = portfolio.total_amount_currencies.units + (
+                    portfolio.total_amount_currencies.nano / pow(10, 9))
+        t_amount_futures = portfolio.total_amount_futures.units + (portfolio.total_amount_futures.nano / pow(10, 9))
         await bot.send_message(message.from_user.id, f'Текущая относительная доходность портфеля, в %: {profit}\n'
                                                      f'Общая стоимость акций в портфеле в рублях: {t_amount_shares}\n'
                                                      f'Общая стоимость облигаций в портфеле в рублях: {t_amount_bonds}\n'
@@ -77,19 +80,25 @@ async def get_portfolio(message: types.Message):
         time.sleep(1)
         positions = portfolio.positions
         for position in positions:
-            figi = position.figi
-            a_position_price = position.average_position_price.units + (position.average_position_price.nano / pow(10,9))
-            ex_yield = position.expected_yield.units + (position.expected_yield.nano / pow(10,9))
-            av_position_price_pt = position.average_position_price_pt.units + (position.average_position_price_pt.nano / pow(10,9))
+            # ticker = client.instruments.share_by(id_type=InstrumentIdType.INSTRUMENT_ID_TYPE_FIGI,
+            #                                      id=position).instrument.ticker
+            a_position_price = position.average_position_price.units + (
+                        position.average_position_price.nano / pow(10, 9))
+            ex_yield = position.expected_yield.units + (position.expected_yield.nano / pow(10, 9))
+            av_position_price_pt = position.average_position_price_pt.units + (
+                        position.average_position_price_pt.nano / pow(10, 9))
             q_lots = position.quantity_lots.units + (position.quantity_lots.nano / pow(10, 9))
-            current_price_instrument = position.current_price.units + (position.current_price.nano / pow(10,9)) * q_lots
+            current_price_instrument = position.current_price.units + (
+                        position.current_price.nano / pow(10, 9)) * q_lots
             await bot.send_message(message.from_user.id, 'Позиции:\n'
-                                                         f'Фиги: {figi}\n'
+                                                         f'Тикер: {position.figi}\n'
                                                          f'Средневзвешенная цена позиции: {a_position_price}\n'
                                                          f'Текущая рассчитанная относительная доходность позиции, в %: {ex_yield}\n'
                                                          f'Средняя цена лота в позиции в пунктах (для фьючерсов): {av_position_price_pt}\n'
                                                          f'Текущая цена за 1 инструмент: {current_price_instrument}\n'
                                                          f'Количество лотов в портфеле: {q_lots}')
+        time.sleep(0.5)
+        await bot.send_message(message.from_user.id, 'Меню', reply_markup=trade_menu)
 
 
 @dp.callback_query_handler(text='btn_4')
@@ -157,11 +166,32 @@ async def add_stock(query: CallbackQuery):
 async def favourites_menu(message: types.Message):
     await bot.send_message(message.from_user.id, f'FAVOURITES: {favourite_stocks}')
 
+
 @dp.callback_query_handler(text='operations')
 async def get_operations(message: types.Message):
     with Client(TOKEN) as client:
-        operations = client.operations.get_operations()
+        operations = client.operations.get_operations(account_id=taccount_id, from_=now() - timedelta(days=365),
+                                                      to=now(), state=OperationState.OPERATION_STATE_EXECUTED,
+                                                      figi='BBG000BH5LT6').operations
 
+        logging.info(f'len operations: {len(operations)}')
+        for operation in operations:
+            currency_operation = operation.currency
+            payment_operation = operation.payment.units + (operation.payment.nano / pow(10, 9))
+            price_operation = operation.price.units + (operation.price.nano / pow(10, 9)) * operation.quantity
+            quantity_operation = operation.quantity
+            ticker = client.instruments.share_by(id_type=InstrumentIdType.INSTRUMENT_ID_TYPE_FIGI,
+                                                 id=operation.figi).instrument.ticker
+            date_operation = operation.date
+            await bot.send_message(message.from_user.id, 'Сделка:\n'
+                                                         f'Тикер: {ticker}\n'
+                                                         f'Сумма операции: {payment_operation}\n'
+                                                         f'Стоимость: {round(price_operation, 2)} {currency_operation}\n'
+                                                         f'Исполненные лоты: {quantity_operation}\n'
+                                                         f'Дата: {date_operation}\n')
+            time.sleep(0.2)
+        time.sleep(0.5)
+        await bot.send_message(message.from_user.id, 'Меню', reply_markup=trade_menu)
 
 @dp.message_handler()
 async def main(message: types.Message):
