@@ -78,21 +78,17 @@ async def get_portfolio(message: types.Message):
         positions = portfolio.positions
         for position in positions:
             figi = position.figi
-            t_instrument = position.instrument_type
-            lots_quantity = position.quantity.units + (position.quantity.nano / pow(10,9))
             a_position_price = position.average_position_price.units + (position.average_position_price.nano / pow(10,9))
             ex_yield = position.expected_yield.units + (position.expected_yield.nano / pow(10,9))
             av_position_price_pt = position.average_position_price_pt.units + (position.average_position_price_pt.nano / pow(10,9))
-            current_price_instrument = position.current_price.units + (position.current_price.nano / pow(10,9))
-            q_lots = position.quantity_lots.units + (position.quantity_lots.nano / pow(10,9))
+            q_lots = position.quantity_lots.units + (position.quantity_lots.nano / pow(10, 9))
+            current_price_instrument = position.current_price.units + (position.current_price.nano / pow(10,9)) * q_lots
             await bot.send_message(message.from_user.id, 'Позиции:\n'
                                                          f'Фиги: {figi}\n'
-                                                         f'Тип инструмента: {t_instrument}\n'
-                                                         f'Количество инструмента в портфеле в штуках: {lots_quantity}\n'
-                                                         f'Средневзвешенная цена позиции. Возможна задержка до секунды для пересчёта: {a_position_price}\n'
+                                                         f'Средневзвешенная цена позиции: {a_position_price}\n'
                                                          f'Текущая рассчитанная относительная доходность позиции, в %: {ex_yield}\n'
-                                                         f'Средняя цена лота в позиции в пунктах (для фьючерсов). Возможна задержка до секунды для пересчёта: {av_position_price_pt}\n'
-                                                         f'Текущая цена за 1 инструмент. Для получения стоимости лота требуется умножить на лотность инструмента: {current_price_instrument}\n'
+                                                         f'Средняя цена лота в позиции в пунктах (для фьючерсов): {av_position_price_pt}\n'
+                                                         f'Текущая цена за 1 инструмент: {current_price_instrument}\n'
                                                          f'Количество лотов в портфеле: {q_lots}')
 
 
@@ -161,23 +157,17 @@ async def add_stock(query: CallbackQuery):
 async def favourites_menu(message: types.Message):
     await bot.send_message(message.from_user.id, f'FAVOURITES: {favourite_stocks}')
 
+@dp.callback_query_handler(text='operations')
+async def get_operations(message: types.Message):
+    with Client(TOKEN) as client:
+        operations = client.operations.get_operations()
+
 
 @dp.message_handler()
 async def main(message: types.Message):
     logging.info(f'[MAIN THREAD]: {message.text}')
-    markup = types.ReplyKeyboardRemove()
-    if message.text == 'Ввести тикер':
-        await bot.send_message(message.from_user.id, 'Вводите тикер большими буквами\nПример: AAPL',
-                               reply_markup=markup)
     tick = message.text
     await add_to_favourites(tick)
-    # elif message.text == 'Пропустить':
-    #     await bot.delete_message(message.from_user.id, message.message_id - 1)
-    #     await bot.send_message(message.from_user.id, 'Меню',
-    #                            reply_markup=trade_menu)
-    # if message.text == 'Удалить акцию':
-    #     await bot.send_message(message.from_user.id, 'Выберите тикер той акции которую хотите удалить')
-    #     await bot.send_message(message.from_user.id, f'{favourite_stocks}')
 
 
 async def delete_from_favourites(ticker: str):
