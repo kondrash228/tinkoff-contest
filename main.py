@@ -1,15 +1,18 @@
 import asyncio
+import logging
 import time
 import pytz
+import os
+
+from dotenv import load_dotenv
 from tinkoff.invest import Client, CandleInstrument, SubscriptionInterval, OperationState
 from tinkoff.invest.services import MarketDataStreamManager, InstrumentIdType
 from aiogram import Bot, Dispatcher, executor, types
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
-import logging
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, CallbackQuery, InlineKeyboardMarkup, \
+    InlineKeyboardButton, BotCommand
 from keyboard import main_menu, trade_menu, exchange, menu, to_menu
 from datetime import datetime, timedelta
 from tinkoff.invest.utils import now
-from tinkoff.invest import schemas
 
 """
 TODO: деление акций по биржам
@@ -17,12 +20,12 @@ TODO: деление акций по биржам
       логи
       время сделок и операций поменять
 """
-TOKEN = 't.BLtZWmlj_Raj-77CQuiflaKQQerwa1MSn56eO_AulW8X2QcC24Bb5RiBF_rjQdzNORfzTEhGmfdJoJeezyu-xQ'
-API_TOKEN = '1993104882:AAHEGfoWyrSZaot8l8MMoblgrMaiBPo9cWY'
-bot = Bot(token=API_TOKEN)
-dp = Dispatcher(bot)
-ID = 802693897
-taccount_id = '2097214379'
+load_dotenv()
+
+TOKEN = os.getenv('TOKEN')
+TG_API_TOKEN = os.getenv('TG_BOT_TOKEN')
+tg_user_id = os.getenv('TG_USER_ID')
+tinkoff_account_id = os.getenv('TINKOFF_ACCOUNT_ID')
 
 favourite_stocks = {}
 stocks = []
@@ -30,10 +33,18 @@ favourite_menu_ticker = []
 tmp = []
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+bot = Bot(token=TG_API_TOKEN)
+dp = Dispatcher(bot)
 
 
 @dp.message_handler(commands=['start'])
 async def start(message: types.Message):
+    commands = [
+        BotCommand(command="/start", description="Начать диалог с ботом"),
+        BotCommand(command="/trade", description="Режим торговли"),
+        BotCommand(command="/help", description="Информация о проекте и боте")
+    ]
+    await bot.set_my_commands(commands)
     await message.answer(
         'Добро пожаловать в торговый терминал в Telegram\nДля того что бы посмотреть мои возможности нажми /help\n'
         'Если хочешь начать торговать нажми /trade')
@@ -51,8 +62,8 @@ async def trade(message: types.Message):
     logging.info(f'User: {message.from_user.first_name} started trading')
     start_message = await message.answer('Вы перешли в режим торгов')
     time.sleep(2)
-    await bot.delete_message(message.from_user.id, start_message.message_id)
-    await bot.delete_message(message.from_user.id, start_message.message_id - 1)
+    await bot.delete_message(tg_user_id, start_message.message_id)
+    await bot.delete_message(tg_user_id, start_message.message_id - 1)
     await message.answer('Меню', reply_markup=main_menu)
 
 
@@ -67,7 +78,7 @@ async def get_portfolio(message: types.Message):
     with Client(TOKEN) as client:
         logging.info('getting positions of users portfolio')
         try:
-            portfolio = client.operations.get_portfolio(account_id=taccount_id)
+            portfolio = client.operations.get_portfolio(account_id=tinkoff_account_id)
             logging.info(portfolio)
             profit = portfolio.expected_yield.units + (portfolio.expected_yield.nano / pow(10, 9))
             t_amount_shares = portfolio.total_amount_shares.units + (portfolio.total_amount_shares.nano / pow(10, 9))
@@ -76,7 +87,7 @@ async def get_portfolio(message: types.Message):
             t_amount_currencies = portfolio.total_amount_currencies.units + (
                     portfolio.total_amount_currencies.nano / pow(10, 9))
             t_amount_futures = portfolio.total_amount_futures.units + (portfolio.total_amount_futures.nano / pow(10, 9))
-            await bot.send_message(message.from_user.id, f'Текущая относительная доходность портфеля, в %: {profit}\n'
+            await bot.send_message(tg_user_id, f'Текущая относительная доходность портфеля, в %: {profit}\n'
                                                          f'Cтоимость акций в портфеле в рублях: {t_amount_shares}\n'
                                                          f'Cтоимость облигаций в портфеле в рублях: {t_amount_bonds}\n'
                                                          f'Cтоимость фондов в портфеле в рублях: {t_amount_etf}\n'
@@ -93,7 +104,7 @@ async def get_portfolio(message: types.Message):
                 q_lots = position.quantity_lots.units + (position.quantity_lots.nano / pow(10, 9))
                 current_price_instrument = position.current_price.units + (
                         position.current_price.nano / pow(10, 9)) * q_lots
-                await bot.send_message(message.from_user.id, 'Позиции:\n'
+                await bot.send_message(tg_user_id, 'Позиции:\n'
                                                              f'Тикер: {position.figi}\n'
                                                              f'{a_position_price} -> {current_price_instrument}\n'
                                                              f'Стоимость бумаг в портфеле'
@@ -103,7 +114,7 @@ async def get_portfolio(message: types.Message):
             logging.error(f'Error while requesting portfolio, error: {e}')
 
         time.sleep(0.5)
-        await bot.send_message(message.from_user.id, 'Меню', reply_markup=main_menu)
+        await bot.send_message(tg_user_id, 'Меню', reply_markup=main_menu)
 
 
 @dp.callback_query_handler(text='btn_4')
@@ -150,13 +161,13 @@ async def add_stock(query: CallbackQuery):
 @dp.callback_query_handler(text='favourites_menu')
 async def favourites_menu(message: types.Message):
     logging.info(f'User: {message.from_user.first_name} requested favourites')
-    await bot.send_message(message.from_user.id, f'FAVOURITES: {favourite_stocks}')
+    await bot.send_message(tg_user_id, f'FAVOURITES: {favourite_stocks}')
 
 
 @dp.callback_query_handler(text='operations')
-async def get_operations(message: types.Message): # add try catch state
+async def get_operations(message: types.Message):  # add try catch state
     with Client(TOKEN) as client:
-        operations = client.operations.get_operations(account_id=taccount_id, from_=now() - timedelta(days=56),
+        operations = client.operations.get_operations(account_id=tinkoff_account_id, from_=now() - timedelta(days=56),
                                                       to=now(),
                                                       ).operations
 
@@ -174,7 +185,7 @@ async def get_operations(message: types.Message): # add try catch state
                                                "%Y-%m-%d %H:%M:%S") + timedelta(hours=3)
                 price_trade = trade.price.units + (trade.price.nano / pow(10, 9))
                 if payment_operation >= 0:  # продажа
-                    await bot.send_message(message.from_user.id, 'Операция:\n'
+                    await bot.send_message(tg_user_id, 'Операция:\n'
                                                                  f'Дата: {date_operation}\n'
                                                                  f'Продажа {quantity_operation} лотов {ticker}\n'
                                                                  f'+{payment_operation}\n'
@@ -184,7 +195,7 @@ async def get_operations(message: types.Message): # add try catch state
                                                                  f'\n\n\n')
                     time.sleep(0.2)
                 else:  # покупка
-                    await bot.send_message(message.from_user.id, 'Операция:\n'
+                    await bot.send_message(tg_user_id, 'Операция:\n'
                                                                  f'Дата: {date_operation}\n'
                                                                  f'Покупка {quantity_operation} лотов {ticker}\n'
                                                                  f'{payment_operation}\n'
@@ -193,14 +204,14 @@ async def get_operations(message: types.Message): # add try catch state
                                                                  f'{date_trade}\t\t{q_trade}шт. по {price_trade}\n')
                     time.sleep(0.2)
     time.sleep(0.5)
-    await bot.send_message(message.from_user.id, 'Меню', reply_markup=trade_menu)
+    await bot.send_message(tg_user_id, 'Меню', reply_markup=trade_menu)
 
 
 @dp.callback_query_handler(text='requests')
 async def get_active_orders(query: CallbackQuery):
     logging.info('get active orders')
     with Client(TOKEN) as client:
-        orders = client.orders.get_orders(account_id=taccount_id)
+        orders = client.orders.get_orders(account_id=tinkoff_account_id)
         if len(orders.orders) == 0:
             await query.message.answer('У вас нет активных заявок')
             logging.info('there is no active orders')
@@ -213,7 +224,7 @@ async def get_active_orders(query: CallbackQuery):
 async def main(message: types.Message):
     logging.info(f'[MAIN THREAD]: {message.text}')
     tick = message.text
-    await add_to_favourites_spb(tick)
+    await add_to_favourites(tick)
 
 
 def check(ticker: str) -> bool:
@@ -223,7 +234,7 @@ def check(ticker: str) -> bool:
         return False
 
 
-async def add_to_favourites_spb(tick: str):
+async def add_to_favourites(tick: str):
     with Client(TOKEN) as client:
 
         instrument = client.instruments.share_by(id_type=InstrumentIdType.INSTRUMENT_ID_TYPE_TICKER,
@@ -234,14 +245,14 @@ async def add_to_favourites_spb(tick: str):
                 favourite_stocks[instrument.ticker] = instrument.figi
                 tmp.append(instrument.ticker)
                 logging.info(favourite_stocks)
-                await bot.send_message(ID, 'Акция успешно добавлена', reply_markup=to_menu)
+                await bot.send_message(tg_user_id, 'Акция успешно добавлена', reply_markup=to_menu)
             else:
-                await bot.send_message(ID,
+                await bot.send_message(tg_user_id,
                                        'Достигнуто максимально колличсетво акций в избранном\nЧто бы удалить акцию нажмите на кнопку ниже',
                                        reply_markup=to_menu)
                 logging.info('max size of favourites')
         else:
-            await bot.send_message(ID, 'Акция уже в избранном')
+            await bot.send_message(tg_user_id, 'Акция уже в избранном')
             logging.info('stock already in favourites')
 
 
