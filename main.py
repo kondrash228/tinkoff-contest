@@ -1,13 +1,13 @@
 import asyncio
 import time
-
+import pytz
 from tinkoff.invest import Client, CandleInstrument, SubscriptionInterval, OperationState
 from tinkoff.invest.services import MarketDataStreamManager, InstrumentIdType
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, CallbackQuery
 import logging
 from keyboard import main_menu, trade_menu, exchange, menu, to_menu
-from datetime import timedelta
+from datetime import datetime, timedelta
 from tinkoff.invest.utils import now
 from tinkoff.invest import schemas
 
@@ -16,7 +16,6 @@ TODO: деление акций по биржам
       тикер в операциях и позициях
       логи
 """
-
 TOKEN = 't.BLtZWmlj_Raj-77CQuiflaKQQerwa1MSn56eO_AulW8X2QcC24Bb5RiBF_rjQdzNORfzTEhGmfdJoJeezyu-xQ'
 API_TOKEN = '1993104882:AAHEGfoWyrSZaot8l8MMoblgrMaiBPo9cWY'
 bot = Bot(token=API_TOKEN)
@@ -85,16 +84,18 @@ async def get_portfolio(message: types.Message):
         for position in positions:
             # ticker = client.instruments.share_by(id_type=InstrumentIdType.INSTRUMENT_ID_TYPE_FIGI,
             #                                      id=position).instrument.ticker
-            a_position_price = position.average_position_price.units + (position.average_position_price.nano / pow(10, 9))
+            a_position_price = position.average_position_price.units + (
+                    position.average_position_price.nano / pow(10, 9))
             ex_yield = position.expected_yield.units + (position.expected_yield.nano / pow(10, 9))
             q_lots = position.quantity_lots.units + (position.quantity_lots.nano / pow(10, 9))
-            current_price_instrument = position.current_price.units + (position.current_price.nano / pow(10, 9)) * q_lots
+            current_price_instrument = position.current_price.units + (
+                    position.current_price.nano / pow(10, 9)) * q_lots
             await bot.send_message(message.from_user.id, 'Позиции:\n'
                                                          f'Тикер: {position.figi}\n'
                                                          f'{a_position_price} -> {current_price_instrument}\n'
                                                          f'Стоимость бумаг в портфеле'
                                                          f'{round(q_lots * current_price_instrument, 2)}\n'
-                                                         f'{ex_yield} ({((a_position_price / current_price_instrument) * 100) - 100})')
+                                                         f'{ex_yield} ({round(((a_position_price / current_price_instrument) * 100) - 100, 2)})')
         time.sleep(0.5)
         await bot.send_message(message.from_user.id, 'Меню', reply_markup=main_menu)
 
@@ -172,9 +173,36 @@ async def get_operations(message: types.Message):
                                                       to=now(),
                                                       ).operations
 
-
-            trade_date = trade.
-            time.sleep(0.2)
+        for operation in operations:
+            currency_operation = operation.currency
+            payment_operation = operation.payment.units + (operation.payment.nano / pow(10, 9))
+            price_operation = operation.price.units + (operation.price.nano / pow(10, 9))
+            quantity_operation = operation.quantity
+            ticker = operation.figi
+            date_operation = datetime.strptime(operation.date.strftime("%Y-%m-%d %H:%M:%S"), "%Y-%m-%d %H:%M:%S") + timedelta(hours=3)
+            for trade in operation.trades:
+                q_trade = trade.quantity
+                date_trade = trade.date_time.strftime("%Y-%m-%d %H:%M:%S")
+                price_trade = trade.price.units + (trade.price.nano / pow(10, 9))
+                if payment_operation >= 0:  # продажа
+                    await bot.send_message(message.from_user.id, 'Операция:\n'
+                                                                 f'Дата: {date_operation}\n'
+                                                                 f'Продажа {quantity_operation} лотов {ticker}\n'
+                                                                 f'+{payment_operation}\n'
+                                                                 f'Цена продажи: {round(price_operation, 2)} {currency_operation}\n\n'
+                                                                 f'Колличество сделок: {len(operation.trades)}\n'
+                                                                 f'{date_trade}\t\t{q_trade}шт. по {price_trade}\n'
+                                                                 f'\n\n\n')
+                    time.sleep(0.2)
+                else:  # покупка
+                    await bot.send_message(message.from_user.id, 'Операция:\n'
+                                                                 f'Дата: {date_operation}\n'
+                                                                 f'Покупка {quantity_operation} лотов {ticker}\n'
+                                                                 f'{payment_operation}\n'
+                                                                 f'Цена покупки: {round(price_operation, 2)} {currency_operation}\n\n'
+                                                                 f'Колличество сделок: {len(operation.trades)}\n'
+                                                                 f'{date_trade}\t\t{q_trade}шт. по {price_trade}\n')
+                    time.sleep(0.2)
     time.sleep(0.5)
     await bot.send_message(message.from_user.id, 'Меню', reply_markup=trade_menu)
 
