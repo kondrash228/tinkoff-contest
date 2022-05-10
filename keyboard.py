@@ -25,11 +25,7 @@ trade_menu.insert(choose)
 trade_menu.insert(back_btn)
 
 exchange = InlineKeyboardMarkup(row_width=2)
-spb = InlineKeyboardButton(text='SPBEX', callback_data='spb')
-msc = InlineKeyboardButton(text='MOEX', callback_data='msc')
 all_stocks = InlineKeyboardButton(text='Избранное', callback_data='favourites_menu')
-exchange.insert(spb)
-exchange.insert(msc)
 exchange.insert(all_stocks)
 exchange.insert(back_btn)
 
@@ -38,14 +34,11 @@ exchange.insert(back_btn)
 
 menu = InlineKeyboardMarkup(row_width=2)
 add_favourites = InlineKeyboardButton(text='Ввести тикер', callback_data='add')
-nothing = InlineKeyboardButton(text='Пропустить', callback_data='skip')
 menu.insert(add_favourites)
-menu.insert(nothing)
 menu.insert(back_btn)
 
 
 to_menu = InlineKeyboardMarkup(row_width=1)
 button = InlineKeyboardButton('Перейти в меню', callback_data='menu')
-delete = InlineKeyboardButton('Удалить акицю', callback_data='delete')
+
 to_menu.insert(button)
-to_menu.insert(delete)
