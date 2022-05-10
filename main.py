@@ -75,33 +75,28 @@ async def get_portfolio(message: types.Message):
                 portfolio.total_amount_currencies.nano / pow(10, 9))
         t_amount_futures = portfolio.total_amount_futures.units + (portfolio.total_amount_futures.nano / pow(10, 9))
         await bot.send_message(message.from_user.id, f'Текущая относительная доходность портфеля, в %: {profit}\n'
-                                                     f'Общая стоимость акций в портфеле в рублях: {t_amount_shares}\n'
-                                                     f'Общая стоимость облигаций в портфеле в рублях: {t_amount_bonds}\n'
-                                                     f'Общая стоимость фондов в портфеле в рублях: {t_amount_etf}\n'
-                                                     f'Общая стоимость валют в портфеле в рублях: {t_amount_currencies}\n'
-                                                     f'Общая стоимость фьючерсов в портфеле в рублях: {t_amount_futures}')
+                                                     f'Cтоимость акций в портфеле в рублях: {t_amount_shares}\n'
+                                                     f'Cтоимость облигаций в портфеле в рублях: {t_amount_bonds}\n'
+                                                     f'Cтоимость фондов в портфеле в рублях: {t_amount_etf}\n'
+                                                     f'Cтоимость валют в портфеле в рублях: {t_amount_currencies}\n'
+                                                     f'Cтоимость фьючерсов в портфеле в рублях: {t_amount_futures}')
         time.sleep(1)
         positions = portfolio.positions
         for position in positions:
             # ticker = client.instruments.share_by(id_type=InstrumentIdType.INSTRUMENT_ID_TYPE_FIGI,
             #                                      id=position).instrument.ticker
-            a_position_price = position.average_position_price.units + (
-                    position.average_position_price.nano / pow(10, 9))
+            a_position_price = position.average_position_price.units + (position.average_position_price.nano / pow(10, 9))
             ex_yield = position.expected_yield.units + (position.expected_yield.nano / pow(10, 9))
-            av_position_price_pt = position.average_position_price_pt.units + (
-                    position.average_position_price_pt.nano / pow(10, 9))
             q_lots = position.quantity_lots.units + (position.quantity_lots.nano / pow(10, 9))
-            current_price_instrument = position.current_price.units + (
-                    position.current_price.nano / pow(10, 9)) * q_lots
+            current_price_instrument = position.current_price.units + (position.current_price.nano / pow(10, 9)) * q_lots
             await bot.send_message(message.from_user.id, 'Позиции:\n'
                                                          f'Тикер: {position.figi}\n'
-                                                         f'Средневзвешенная цена позиции: {a_position_price}\n'
-                                                         f'Текущая рассчитанная относительная доходность позиции, в %: {ex_yield}\n'
-                                                         f'Средняя цена лота в позиции в пунктах (для фьючерсов): {av_position_price_pt}\n'
-                                                         f'Текущая цена за 1 инструмент: {current_price_instrument}\n'
-                                                         f'Количество лотов в портфеле: {q_lots}')
+                                                         f'{a_position_price} -> {current_price_instrument}\n'
+                                                         f'Стоимость бумаг в портфеле'
+                                                         f'{round(q_lots * current_price_instrument, 2)}\n'
+                                                         f'{ex_yield} ({((a_position_price / current_price_instrument) * 100) - 100})')
         time.sleep(0.5)
-        await bot.send_message(message.from_user.id, 'Меню', reply_markup=trade_menu)
+        await bot.send_message(message.from_user.id, 'Меню', reply_markup=main_menu)
 
 
 @dp.callback_query_handler(text='btn_4')
@@ -173,23 +168,12 @@ async def favourites_menu(message: types.Message):
 @dp.callback_query_handler(text='operations')
 async def get_operations(message: types.Message):
     with Client(TOKEN) as client:
-        operations = client.operations.get_operations(account_id=taccount_id, from_=now() - timedelta(days=30),
+        operations = client.operations.get_operations(account_id=taccount_id, from_=now() - timedelta(days=56),
                                                       to=now(),
                                                       ).operations
 
-        for operation in operations:
-            currency_operation = operation.currency
-            payment_operation = operation.payment.units + (operation.payment.nano / pow(10, 9))
-            price_operation = operation.price.units + (operation.price.nano / pow(10, 9)) * operation.quantity
-            quantity_operation = operation.quantity
-            ticker = operation.figi
-            date_operation = operation.date
-            await bot.send_message(message.from_user.id, 'Сделка:\n'
-                                                         f'Тикер: {ticker}\n'
-                                                         f'Сумма операции: {payment_operation}\n'
-                                                         f'Стоимость: {round(price_operation, 2)} {currency_operation}\n'
-                                                         f'Исполненные лоты: {quantity_operation}\n'
-                                                         f'Дата: {date_operation}\n')
+
+            trade_date = trade.
             time.sleep(0.2)
     time.sleep(0.5)
     await bot.send_message(message.from_user.id, 'Меню', reply_markup=trade_menu)
