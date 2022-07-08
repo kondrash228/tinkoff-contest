@@ -139,9 +139,7 @@ async def load_all_stocks(query: CallbackQuery):
         for ticker in tmp:
             buttons = []
             keyboard = types.InlineKeyboardMarkup(row_width=1)
-            while len(tmp) > 0:
-                buttons.append(InlineKeyboardButton(text=ticker, callback_data='123'))
-                tmp.remove(ticker)
+            buttons.append(InlineKeyboardButton(text=ticker, callback_data='123'))
             keyboard.add(*buttons)
             await query.message.answer("Избранное", reply_markup=keyboard)
 
